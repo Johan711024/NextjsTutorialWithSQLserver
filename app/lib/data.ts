@@ -54,9 +54,14 @@ export async function fetchLatestInvoices() {
         const sqlQuery = `SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
       FROM invoices
       JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC`
+      ORDER BY invoices.date DESC
+      OFFSET 0 ROWS
+      FETCH NEXT 5 ROWS ONLY
+      `
+
         const q = await promises.query(sqlQuery)
-        const data = q.first.slice(0, 5) //first 5 rows
+        const data = q.first
+        //const data = q.first.slice(0, 5) //first 5 rows
 
         //   const data2 = await sql<LatestInvoiceRaw>`
         // SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
@@ -125,7 +130,34 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
     const offset = (currentPage - 1) * ITEMS_PER_PAGE
 
     try {
-        const invoices = await sql<InvoicesTable>`
+        const promises: ConnectionPromises = await getConnection()
+
+        const sqlQuery = `SELECT
+        invoices.id,
+        invoices.amount,
+        invoices.date,
+        invoices.status,
+        customers.name,
+        customers.email,
+        customers.image_url
+      FROM invoices
+      JOIN customers ON invoices.customer_id = customers.id
+      WHERE
+        customers.name LIKE '${`%${query}%`}' OR
+        customers.email LIKE '${`%${query}%`}' OR
+        invoices.amount LIKE '${`%${query}%`}' OR
+        invoices.date LIKE '${`%${query}%`}' OR
+        invoices.status LIKE '${`%${query}%`}'
+      ORDER BY invoices.date DESC
+      OFFSET ${offset} ROWS
+      FETCH NEXT ${ITEMS_PER_PAGE} ROWS ONLY
+      `
+        console.log(sqlQuery)
+        const data = await promises.query(sqlQuery)
+        const invoices = data.first
+        return invoices
+
+        /*  const invoices = await sql<InvoicesTable>`
       SELECT
         invoices.id,
         invoices.amount,
@@ -144,9 +176,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
         invoices.status ILIKE ${`%${query}%`}
       ORDER BY invoices.date DESC
       LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
-    `
-
-        return invoices.rows
+    `*/
     } catch (error) {
         console.error('Database Error:', error)
         throw new Error('Failed to fetch invoices.')
@@ -155,7 +185,25 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
 
 export async function fetchInvoicesPages(query: string) {
     try {
-        const count = await sql`SELECT COUNT(*)
+        const promises: ConnectionPromises = await getConnection()
+
+        const sqlQuery = `SELECT COUNT(*)
+    FROM invoices
+    JOIN customers ON invoices.customer_id = customers.id
+    WHERE
+      customers.name LIKE '${`%${query}%`}' OR
+      customers.email LIKE '${`%${query}%`}' OR
+      invoices.amount LIKE '${`%${query}%`}' OR
+      invoices.date LIKE '${`%${query}%`}' OR
+      invoices.status LIKE '${`%${query}%`}'
+  `
+
+        const data = await promises.query(sqlQuery)
+        //const count = data.first
+        const count = Number(Object.values(data.first[0]) ?? '0')
+        console.log('COUNT', count)
+
+        /*   const count = await sql`SELECT COUNT(*)
     FROM invoices
     JOIN customers ON invoices.customer_id = customers.id
     WHERE
@@ -164,9 +212,9 @@ export async function fetchInvoicesPages(query: string) {
       invoices.amount::text ILIKE ${`%${query}%`} OR
       invoices.date::text ILIKE ${`%${query}%`} OR
       invoices.status ILIKE ${`%${query}%`}
-  `
+  `*/
 
-        const totalPages = Math.ceil(Number(count.rows[0].count) / ITEMS_PER_PAGE)
+        const totalPages = Math.ceil(Number(count) / ITEMS_PER_PAGE)
         return totalPages
     } catch (error) {
         console.error('Database Error:', error)
