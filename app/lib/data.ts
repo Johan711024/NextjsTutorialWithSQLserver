@@ -1,6 +1,5 @@
 import { sql } from '@vercel/postgres'
-import { Connection, ConnectionPromises } from 'msnodesqlv8/types'
-import dbConnect from '../../utils/dbConnect'
+import { doSqlQuery } from './database'
 
 import {
     CustomerField,
@@ -12,13 +11,7 @@ import {
     Revenue,
 } from './definitions'
 import { formatCurrency } from './utils'
-
-async function getConnection(): Promise<ConnectionPromises> {
-    const sql = dbConnect()
-    console.log(`[dashboard] opening connection`)
-    const con: Connection = await sql.driver.promises.open(sql.connStr)
-    return con.promises
-}
+import { get } from 'http'
 
 export async function fetchRevenue() {
     // Add noStore() here to prevent the response from being cached.
@@ -27,21 +20,11 @@ export async function fetchRevenue() {
     try {
         // Artificially delay a response for demo purposes.
         // Don't do this in production :)
-
         console.log('Fetching revenue data...')
         await new Promise(resolve => setTimeout(resolve, 3000))
 
-        const promises: ConnectionPromises = await getConnection()
-        const sqlQuery = 'SELECT * FROM dbo.revenue'
-        const data = await promises.query(sqlQuery)
-        const revenue: Revenue[] = data.first
-        return revenue
-
-        //const data = await sql<Revenue>`SELECT * FROM revenue`
-
-        // console.log('Data fetch completed after 3 seconds.');
-
-        //return data.rows
+        const revenue = await doSqlQuery('SELECT * FROM dbo.revenue')
+        return revenue.first
     } catch (error) {
         console.error('Database Error:', error)
         throw new Error('Failed to fetch revenue data.')
@@ -50,7 +33,6 @@ export async function fetchRevenue() {
 
 export async function fetchLatestInvoices() {
     try {
-        const promises: ConnectionPromises = await getConnection()
         const sqlQuery = `SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
       FROM invoices
       JOIN customers ON invoices.customer_id = customers.id
@@ -58,19 +40,9 @@ export async function fetchLatestInvoices() {
       OFFSET 0 ROWS
       FETCH NEXT 5 ROWS ONLY
       `
+        const data = await doSqlQuery(sqlQuery)
 
-        const q = await promises.query(sqlQuery)
-        const data = q.first
-        //const data = q.first.slice(0, 5) //first 5 rows
-
-        //   const data2 = await sql<LatestInvoiceRaw>`
-        // SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-        // FROM invoices
-        // JOIN customers ON invoices.customer_id = customers.id
-        // ORDER BY invoices.date DESC
-        // LIMIT 5`
-
-        const latestInvoices = data.map(invoice => ({
+        const latestInvoices = data.first.map(invoice => ({
             ...invoice,
             amount: formatCurrency(invoice.amount),
         }))
@@ -87,25 +59,16 @@ export async function fetchCardData() {
         // However, we are intentionally splitting them to demonstrate
         // how to initialize multiple queries in parallel with JS.
 
-        const promises: ConnectionPromises = await getConnection()
-        //const invoiceCountPromise = `SELECT COUNT(*) FROM invoices`
-        const invoiceCountPromise = await promises.query(`SELECT COUNT(*) FROM invoices`)
-        const customerCountPromise = await promises.query(`SELECT COUNT(*) FROM customers`)
-        const invoiceStatusPromise = await promises.query(`SELECT
+        const invoiceCountPromise = await doSqlQuery(`SELECT COUNT(*) FROM invoices`)
+        const customerCountPromise = await doSqlQuery(`SELECT COUNT(*) FROM customers`)
+        const invoiceStatusPromise = await doSqlQuery(`SELECT
          SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
          FROM invoices`)
 
+        console.log(invoiceCountPromise)
+
         const data = [invoiceCountPromise, customerCountPromise, invoiceStatusPromise]
-
-        // const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`
-        // const customerCountPromise = sql`SELECT COUNT(*) FROM customers`
-        // const invoiceStatusPromise = sql`SELECT
-        //  SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
-        //  SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-        //  FROM invoices`
-
-        //const data = await Promise.all([invoiceCountPromise, customerCountPromise, invoiceStatusPromise])
 
         const numberOfInvoices = Number(Object.values(data[0].first[0]) ?? '0')
         const numberOfCustomers = Number(Object.values(data[1].first[0]) ?? '0')
@@ -130,8 +93,6 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
     const offset = (currentPage - 1) * ITEMS_PER_PAGE
 
     try {
-        const promises: ConnectionPromises = await getConnection()
-
         const sqlQuery = `SELECT
         invoices.id,
         invoices.amount,
@@ -153,7 +114,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
       FETCH NEXT ${ITEMS_PER_PAGE} ROWS ONLY
       `
         console.log(sqlQuery)
-        const data = await promises.query(sqlQuery)
+        const data = await doSqlQuery(sqlQuery)
         const invoices = data.first
         return invoices
 
@@ -185,8 +146,6 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
 
 export async function fetchInvoicesPages(query: string) {
     try {
-        const promises: ConnectionPromises = await getConnection()
-
         const sqlQuery = `SELECT COUNT(*)
     FROM invoices
     JOIN customers ON invoices.customer_id = customers.id
@@ -197,22 +156,9 @@ export async function fetchInvoicesPages(query: string) {
       invoices.date LIKE '${`%${query}%`}' OR
       invoices.status LIKE '${`%${query}%`}'
   `
-
-        const data = await promises.query(sqlQuery)
-        //const count = data.first
+        const data = await doSqlQuery(sqlQuery)
         const count = Number(Object.values(data.first[0]) ?? '0')
         console.log('COUNT', count)
-
-        /*   const count = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-  `*/
 
         const totalPages = Math.ceil(Number(count) / ITEMS_PER_PAGE)
         return totalPages
@@ -224,17 +170,25 @@ export async function fetchInvoicesPages(query: string) {
 
 export async function fetchInvoiceById(id: string) {
     try {
-        const data = await sql<InvoiceForm>`
-      SELECT
+        //     const data = await sql<InvoiceForm>`
+        //   SELECT
+        //     invoices.id,
+        //     invoices.customer_id,
+        //     invoices.amount,
+        //     invoices.status
+        //   FROM invoices
+        //   WHERE invoices.id = ${id};`
+
+        const sqlQuery = `SELECT
         invoices.id,
         invoices.customer_id,
         invoices.amount,
         invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
-    `
+        FROM invoices
+        WHERE invoices.id = '${id}';`
+        const data = await doSqlQuery(sqlQuery)
 
-        const invoice = data.rows.map(invoice => ({
+        const invoice = data.first.map(invoice => ({
             ...invoice,
             // Convert amount from cents to dollars
             amount: invoice.amount / 100,
@@ -249,15 +203,17 @@ export async function fetchInvoiceById(id: string) {
 
 export async function fetchCustomers() {
     try {
-        const data = await sql<CustomerField>`
-      SELECT
+        //const promises: ConnectionPromises = await getConnection()
+
+        const sqlQuery = `SELECT
         id,
         name
       FROM customers
       ORDER BY name ASC
-    `
-
-        const customers = data.rows
+  `
+        //const data = await promises.query(sqlQuery)
+        const data = await doSqlQuery(sqlQuery)
+        const customers = data.first
         return customers
     } catch (err) {
         console.error('Database Error:', err)
