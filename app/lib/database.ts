@@ -9,6 +9,9 @@ export async function getConnection(): Promise<ConnectionPromises> {
 }
 export async function doSqlQuery(sqlQuery: string) {
     const promises: ConnectionPromises = await getConnection()
+    console.log(`[dashboard] executing query: ${sqlQuery}`)
     const data = await promises.query(sqlQuery)
+    console.log(`[dashboard] query executed`)
+
     return data
 }

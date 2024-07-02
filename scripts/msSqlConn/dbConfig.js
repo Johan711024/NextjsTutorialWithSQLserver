@@ -1,19 +1,12 @@
-//local db connection
-
 const dbConfig = {
-    database: 'EtjanstMallContext', // your database name
-    server: '(localdb)\\MSSQLLocalDB', // your server name
+    database: process.env.DB_DATABASE, // your database name
+    server: process.env.DB_HOST, // your server name
     driver: 'msnodesqlv8',
-    //     // server: '(localdb)\MSSQLLocalDB',
-    //     // port: 1433,
-    //     // database: 'EtjanstMallContext',
-    //     // server: 'utv-mssql02\\UTV_MSSQL02',
-    //     // database: 'FormsDb',
-    //     // user: 'UTV_dbOwner',
-    //     // password: 'Somm@r2021!',
-    //     //driver: "msnodesqlv8",
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
     options: {
-        trustedConnection: true,
+        trustedConnection: false,
     },
 }
+
 module.exports = dbConfig
