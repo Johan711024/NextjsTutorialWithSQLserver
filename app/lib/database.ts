@@ -12,6 +12,7 @@ export async function doSqlQuery(sqlQuery: string) {
     console.log(`[dashboard] executing query: ${sqlQuery}`)
     const data = await promises.query(sqlQuery)
     console.log(`[dashboard] query executed`)
+    await promises.close()
 
     return data
 }
