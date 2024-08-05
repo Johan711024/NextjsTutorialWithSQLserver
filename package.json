@@ -10,6 +10,9 @@
         "lint": "next lint"
     },
     "dependencies": {
+        "@contentful/live-preview": "^3.3.2",
+        "@contentful/rich-text-react-renderer": "^15.19.6",
+        "@contentful/rich-text-types": "^16.3.5",
         "@heroicons/react": "^2.0.18",
         "@tailwindcss/forms": "^0.5.7",
         "@types/node": "20.5.7",
@@ -17,6 +20,7 @@
         "autoprefixer": "10.4.15",
         "bcrypt": "^5.1.1",
         "clsx": "^2.0.0",
+        "contentful": "^10.12.8",
         "msnodesqlv8": "^4.2.1",
         "mssql": "^11.0.0",
         "next": "15.0.0-rc.0",
@@ -25,6 +29,7 @@
         "postcss": "8.4.31",
         "react": "19.0.0-rc-6230622a1a-20240610",
         "react-dom": "19.0.0-rc-6230622a1a-20240610",
+        "styled-components": "^6.0.0-rc.3",
         "tailwindcss": "3.3.3",
         "typescript": "5.2.2",
         "use-debounce": "^10.0.1",
